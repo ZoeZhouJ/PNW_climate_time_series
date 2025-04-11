@@ -1,0 +1,26 @@
+---
+title: "Exploring Climate Trends in the Pacific Northwest"
+author: "Kelsey Warren" & "Zoe Zhou"
+date: today
+format: 
+  html:
+    code-fold: true
+    embed-resources: true
+    toc: true
+execute:
+  warning: false
+  message: false
+theme: minty
+---
+
+![Nice picture](https://www.nps.gov/olym/planyourvisit/images/Toleak-Sun-2_7643236_2.JPG?maxwidth=1300&autorotate=false&quality=78&format=webp)
+
+### Overview
+
+### Data Summary
+
+### Set up
+```{r}
+
+```
+
