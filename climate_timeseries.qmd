@@ -18,19 +18,19 @@ theme: minty
 ### Overview
 
 ### Data Summary
-  
+
 Climate daily summaries, including daily maximum, minimum, and average temperatures, as well as precipitation totals, were obtained for Port Angeles, Washington, from the Global Historical Climatology Network database via the [NOAA National Centers for Environmental Information (NCEI)](https://www.ncdc.noaa.gov/cdo-web/). The dataset encompasses the entire period of record for the station, ranging from 1998 to 2025.
- 
+
 GHCN (Global Historical Climatology Network)-Daily is a database that addresses the critical need for historical daily temperature, precipitation, and snow records over global land areas. GHCN-Daily is a composite of climate records from numerous sources that were merged and then subjected to a suite of quality assurance reviews. The archive includes over 40 meteorological elements including temperature daily maximum/minimum, temperature at observation time, precipitation, snowfall, snow depth, evaporation, wind movement, wind maximums, soil temperature, cloudiness, and more.
 
-**Data Citation**: 
+**Data Citation**:
 
-Menne, M.J., I. Durre, B. Korzeniewski, S. McNeill, K. Thomas, X. Yin, S. Anthony, R. Ray, 
-R.S. Vose, B.E.Gleason, and T.G. Houston, 2012: Global Historical Climatology Network - 
-Daily (GHCN-Daily), Version 3. NOAA National Climatic Data Center. http://doi.org/10.7289/V5D21VHZ [April 11th, 2025].
+Menne, M.J., I. Durre, B. Korzeniewski, S. McNeill, K. Thomas, X. Yin, S. Anthony, R. Ray, R.S. Vose, B.E.Gleason, and T.G. Houston, 2012: Global Historical Climatology Network - Daily (GHCN-Daily), Version 3. NOAA National Climatic Data Center. http://doi.org/10.7289/V5D21VHZ \[April 11th, 2025\].
 
 ### Set up
-The following libraries will be used for data manipulation, visualization, and building nonparametric test. 
+
+The following libraries will be used for data manipulation, visualization, and building nonparametric test.
+
 ```{r message=FALSE, warning=FALSE}
 library(lubridate)
 library(tidyverse)
@@ -39,18 +39,23 @@ library(skimr)
 ```
 
 ### Import data
+
 <details>
+
 <summary>Click here to expand summary table</summary>
+
 ```{r}
 clim = read.table("PortAngeles_GHCND_USW00094266.csv",fill=TRUE,sep=',',header=T)
 #head(clim)
 skim(clim)
 ```
+
 </details>
 
 From the data summary, we can see that the variable `TAVG` which stands for average temperature, and `TSUN` which stands for Total Sunshine, are both missing more than 70% of the data. We will drop these two variables because they are no longer useful for our analysis.
 
 ### Clean data
+
 ```{r}
 # Convert date to correct datatype and drop uncessary columns
 clim_clean <- clim %>% 
@@ -58,9 +63,7 @@ clim_clean <- clim %>%
   select(-TSUN, -TAVG)
 ```
 
-
-:::{.panel-tabset}
-
+::: panel-tabset
 ## Precipitation
 
 The `PRPC` column contains 23 missing data points (NaNs). After examining these missing values, it was decided to replace them with zero. This approach was chosen because the precipitation data for adjacent dates also showed zero precipitation.
@@ -75,6 +78,7 @@ ggplot(clim_clean, aes(DATE, PRCP)) +
   labs(y="Daily Precipitation", x="Date") 
 
 ```
+
 ## Maximum Temperature
 
 Replace missing data with the average of the previous and following day
@@ -97,6 +101,7 @@ ggplot(clim_clean, aes(DATE, TMAX)) +
 ```
 
 ## Minimum Temperature
+
 ```{r message=TRUE, warning=TRUE}
 # Remove NAs and negative values
 tmin_na <- which(is.na(clim_clean$TMIN)|clim_clean$TMIN < 0)
@@ -112,15 +117,14 @@ ggplot(clim_clean, aes(DATE, TMIN)) +
 ```
 :::
 
-
 ### Trend analysis for climate averages
 
 In this section, we will analyze the trends in temperature and precipitation data over time. We will use linear regression and the Mann-Kendall test to analyze the trend of the time series data. It is particularly useful for detecting monotonic trends in data that may not be normally distributed.
 
-
 We will first use annual averages to aggregate the data.
 
 #### Plot annualized temperature trend
+
 ```{r}
 # Remove uncomplete data years
 clim.mwy = clim_clean %>% 
@@ -147,10 +151,11 @@ clim_month <- clim_clean %>%
     precip=sum(PRCP)) 
 ```
 
-:::{.panel-tabset}
-
+::: panel-tabset
 ## Maximum Temperature
-Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to August. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant. 
+
+Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to August. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant.
+
 ```{r}
 clim_month %>% 
   ggplot(aes(x=year, tmax)) +
@@ -161,7 +166,8 @@ clim_month %>%
 ```
 
 ## Minimum Temperature
-Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to Semptember. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant. 
+
+Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to September. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant.
 
 ```{r}
 clim_month %>% 
@@ -173,7 +179,9 @@ clim_month %>%
 ```
 
 ## Precipitation
+
 Not much trend conclusion can be drawn from precipitation data alone, but we can still visualize the trends.
+
 ```{r}
 clim_month %>% 
   ggplot(aes(x=year, precip)) +
@@ -182,12 +190,13 @@ clim_month %>%
   labs(title = "Precipitation Trends by Month", y="Precipitation (Inches)", x="Year")+
   theme_minimal()
 ```
-
 :::
 
 ### Statistical test on seasonal temperature data
+
 #### Linear regression
-We want to use linear regression to test the climate trends in summer months. 
+
+We want to use linear regression to test the climate trends in summer months.
 
 ```{r message=FALSE, warning=FALSE}
 # create a variable for seasons
@@ -209,11 +218,13 @@ ggplot(clim.summer, aes(x=year, y=tmin)) +
   labs(y=" Summer Minimum Daily Temperature C")+
   theme_minimal()
 ```
+
 ```{r}
 res=lm(tmin~year, data=clim.summer)
 summary(res)
 ```
-**The model shows a statistically significant positive trend in maximum summer temperature over the years. For every one-year increase, `tmax` is expected to increase by 0.10253 degree. Both the slope and the overall model are highly significant (p-values < 0.001)**
+
+**The model shows a statistically significant positive trend in minimum summer temperature over the years. For every one-year increase, `tmax` is expected to increase by 0.10253 degree. Both the slope and the overall model are highly significant (p-values \< 0.001)**
 
 #### Mann-Kendall test
 
@@ -229,17 +240,18 @@ MannKendall(clim.summer$precip)
 
 Interpretation of the results:
 
-- The Mann-Kendall test for the summer minimum temperature shows a statistically significant positive trend (p-value < 0.001). The tau value of 0.514 indicates a moderate positive trend.
+-   The Mann-Kendall test for the summer minimum temperature shows a statistically significant positive trend (p-value \< 0.001). The tau value of 0.514 indicates a moderate positive trend.
 
-- The Mann-Kendall test for the summer maximum temperature also shows a statistically significant positive trend (p-value < 0.001). The tau value of 0.5 indicates a moderate positive trend.
+-   The Mann-Kendall test for the summer maximum temperature also shows a statistically significant positive trend (p-value \< 0.001). The tau value of 0.5 indicates a moderate positive trend.
 
-- The Mann-Kendall test for the summer precipitation shows a statistically nonsignificant negative trend (p-value > 0.19334). 
+-   The Mann-Kendall test for the summer precipitation shows a statistically nonsignificant negative trend (p-value \> 0.19334).
 
 ### Trend analysis for climate extremes
 
-In this section, we will analyze the trends in temperature and precipitation extremes over time. 
+In this section, we will analyze the trends in temperature and precipitation extremes over time.
 
 #### Extreme metrics: number of freezing days
+
 ```{r}
 clim_clean$freeze = ifelse(clim_clean$TMIN <= 32, 1, 0)
 clim.wfrdata <- clim_clean %>%  
@@ -247,12 +259,14 @@ clim.wfrdata <- clim_clean %>%
   summarize(ndayfr=sum(freeze, na.rm=TRUE))
 clim.wfrdata$dt = unique(year(clim_clean$DATE))
 
-ggplot(clim.wfrdata, aes(dt, ndayfr))+geom_point()+labs(y="Number of Freezing Days")
+ggplot(clim.wfrdata, aes(dt, ndayfr))+geom_point()+labs(y="Number of Freezing Days")+  geom_smooth(method="lm", col="navy")
 ```
-**Interpertation of the results:...**
+
+**Interpretation of the results: There does not appear to be a clear increasing or decreasing linear trend in the number of freezing days per year from 1998 to 2024.**
 
 #### Extreme metrics: Return periods
-We’ll specify some reasonable threshold for daily precipitation: say, 1 inch/day. To calculate the return period associated with that threshold, what we do is the following: * Use ifelse to create a field called “flood” that is 1 when precipitation is above the threshold, and 0 otherwise * Store the total number of years by first identifying the total number of unique years, then calculating the length of the array where those unique years are listed
+
+We’ll specify some reasonable threshold for daily precipitation: say, 1 inch/day. To calculate the return period associated with that threshold, what we do is the following: \* Use ifelse to create a field called “flood” that is 1 when precipitation is above the threshold, and 0 otherwise \* Store the total number of years by first identifying the total number of unique years, then calculating the length of the array where those unique years are listed
 
 The return period is then the number of years (plus one to include the starting year) divided by the number of times the threshold exceedance has actually occurred. (Note: we have to use the na.rm=TRUE flag to prevent NA entries from seeming like they are contributing to the count of threshold exceedances!)
 
@@ -264,5 +278,4 @@ retper=(nyrs+1)/sum(clim_clean$flood,na.rm=TRUE)
 retper
 ```
 
-
- **A flood day (precipitation ≥ 1) is expected to occur roughly every 99 days on average.**
+**Interpretation of the results: A flood day (precipitation ≥ 1) is expected to occur roughly every 99 days on average.**
