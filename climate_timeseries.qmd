@@ -224,7 +224,7 @@ res=lm(tmin~year, data=clim.summer)
 summary(res)
 ```
 
-**The model shows a statistically significant positive trend in minimum summer temperature over the years. For every one-year increase, `tmax` is expected to increase by 0.10253 degree. Both the slope and the overall model are highly significant (p-values \< 0.001)**
+**The model shows a statistically significant positive trend in minimum summer temperature over the years. For every one-year increase, `tmin` is expected to increase by 0.10253 degree. Both the slope and the overall model are highly significant (p-values \< 0.001)**
 
 #### Mann-Kendall test
 
