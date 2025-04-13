@@ -1,6 +1,6 @@
 ---
-title: "Exploring Climate Trends in the Pacific Northwest"
-author: "Kelsey Warren" & "Zoe Zhou"
+title: "Exploring Climate Trends in Port Angeles"
+author: "Kelsey Warren & Zoe Zhou"
 date: today
 format: 
   html:
@@ -8,19 +8,261 @@ format:
     embed-resources: true
     toc: true
 execute:
-  warning: false
-  message: false
+  warning: true
+  message: true
 theme: minty
 ---
 
-![Nice picture](https://www.nps.gov/olym/planyourvisit/images/Toleak-Sun-2_7643236_2.JPG?maxwidth=1300&autorotate=false&quality=78&format=webp)
+![The Olympic National Park](https://www.nps.gov/olym/planyourvisit/images/Toleak-Sun-2_7643236_2.JPG?maxwidth=1300&autorotate=false&quality=78&format=webp)
 
 ### Overview
 
 ### Data Summary
+  
+Climate daily summaries, including daily maximum, minimum, and average temperatures, as well as precipitation totals, were obtained for Port Angeles, Washington, from the Global Historical Climatology Network database via the [NOAA National Centers for Environmental Information (NCEI)](https://www.ncdc.noaa.gov/cdo-web/). The dataset encompasses the entire period of record for the station, ranging from 1998 to 2025.
+ 
+GHCN (Global Historical Climatology Network)-Daily is a database that addresses the critical need for historical daily temperature, precipitation, and snow records over global land areas. GHCN-Daily is a composite of climate records from numerous sources that were merged and then subjected to a suite of quality assurance reviews. The archive includes over 40 meteorological elements including temperature daily maximum/minimum, temperature at observation time, precipitation, snowfall, snow depth, evaporation, wind movement, wind maximums, soil temperature, cloudiness, and more.
+
+**Data Citation**: 
+
+Menne, M.J., I. Durre, B. Korzeniewski, S. McNeill, K. Thomas, X. Yin, S. Anthony, R. Ray, 
+R.S. Vose, B.E.Gleason, and T.G. Houston, 2012: Global Historical Climatology Network - 
+Daily (GHCN-Daily), Version 3. NOAA National Climatic Data Center. http://doi.org/10.7289/V5D21VHZ [April 11th, 2025].
 
 ### Set up
-```{r}
-
+The following libraries will be used for data manipulation, visualization, and building nonparametric test. 
+```{r message=FALSE, warning=FALSE}
+library(lubridate)
+library(tidyverse)
+library(Kendall)
+library(skimr)
 ```
 
+### Import data
+<details>
+<summary>Click here to expand summary table</summary>
+```{r}
+clim = read.table("PortAngeles_GHCND_USW00094266.csv",fill=TRUE,sep=',',header=T)
+#head(clim)
+skim(clim)
+```
+</details>
+
+From the data summary, we can see that the variable `TAVG` which stands for average temperature, and `TSUN` which stands for Total Sunshine, are both missing more than 70% of the data. We will drop these two variables because they are no longer useful for our analysis.
+
+### Clean data
+```{r}
+# Convert date to correct datatype and drop uncessary columns
+clim_clean <- clim %>% 
+  mutate(DATE = as.Date(clim$DATE)) %>% 
+  select(-TSUN, -TAVG)
+```
+
+
+:::{.panel-tabset}
+
+## Precipitation
+
+The `PRPC` column contains 23 missing data points (NaNs). After examining these missing values, it was decided to replace them with zero. This approach was chosen because the precipitation data for adjacent dates also showed zero precipitation.
+
+```{r message=TRUE, warning=TRUE}
+
+prcp_na <- which(is.na(clim_clean$PRCP))
+clim_clean$PRCP[prcp_na]=0
+
+ggplot(clim_clean, aes(DATE, PRCP)) +
+  geom_line()+
+  labs(y="Daily Precipitation", x="Date") 
+
+```
+## Maximum Temperature
+
+Replace missing data with the average of the previous and following day
+
+```{r message=TRUE, warning=TRUE}
+tmax_na <- which(is.na(clim_clean$TMAX))
+tmax_na <- tmax_na[2:length(tmax_na)] # 
+clim_clean$TMAX[tmax_na] <- (clim_clean$TMAX[tmax_na-1] + clim_clean$TMAX[tmax_na+1]) / 2
+
+
+
+# Count remaining NA values
+#sum(is.na(clim_clean$TMAX))  
+
+
+# Plot data
+ggplot(clim_clean, aes(DATE, TMAX)) +
+  geom_line()+
+  labs(y="Daily Maximum Temperature", x="Date") 
+```
+
+## Minimum Temperature
+```{r message=TRUE, warning=TRUE}
+# Remove NAs and negative values
+tmin_na <- which(is.na(clim_clean$TMIN)|clim_clean$TMIN < 0)
+tmin_na <- tmin_na[2:length(tmin_na)] # 
+clim_clean$TMIN[tmin_na] <- (clim_clean$TMIN[tmin_na-1] + clim_clean$TMIN[tmin_na+1]) / 2
+
+
+
+ggplot(clim_clean, aes(DATE, TMIN)) +
+  geom_line()+
+  labs(y="Daily Minimum Temperature", x="Date") 
+
+```
+:::
+
+
+### Trend analysis for climate averages
+
+In this section, we will analyze the trends in temperature and precipitation data over time. We will use linear regression and the Mann-Kendall test to analyze the trend of the time series data. It is particularly useful for detecting monotonic trends in data that may not be normally distributed.
+
+
+We will first use annual averages to aggregate the data.
+
+#### Plot annualized temperature trend
+```{r}
+# Remove uncomplete data years
+clim.mwy = clim_clean %>% 
+  group_by(year = year(DATE)) %>% 
+  summarize(tmax=mean(TMAX, na.rm = TRUE), tmin=mean(TMIN, na.rm=TRUE), precip=sum(PRCP)) %>% 
+  filter(year != min(year) & year!= max(year))
+
+
+ggplot(clim.mwy, aes(x=year, tmax))+geom_point(col="red")+
+  scale_y_continuous(limits=c(min(clim.mwy$tmin), max(clim.mwy$tmax)))+
+  geom_point(data=clim.mwy, aes(x=year, tmin), col="blue")+
+  labs(title = "Annual Temperature Trends", y="Temperature (F)", x="Year")+
+  theme_minimal()
+```
+
+#### Plot seasonal temperature trend
+
+```{r warning =FALSE, message=FALSE}
+clim_month <- clim_clean %>% 
+  group_by(year=year(DATE), month = month(DATE, label=TRUE)) %>% 
+  summarize(
+    tmax=mean(TMAX, na.rm = TRUE), 
+    tmin=mean(TMIN, na.rm=TRUE), 
+    precip=sum(PRCP)) 
+```
+
+:::{.panel-tabset}
+
+## Maximum Temperature
+Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to August. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant. 
+```{r}
+clim_month %>% 
+  ggplot(aes(x=year, tmax)) +
+  geom_line()+
+  facet_wrap(~month)+
+  labs(title = "Maximum Temperature Trends by Month", y="Temperature (F)", x="Year")+
+  theme_minimal()
+```
+
+## Minimum Temperature
+Between 1998 to 2024, the minimum temperature shows increasing trends in summer months, especially from May to Semptember. We can test the trend using the **Mann-Kendall** test to see if our observation is statistically significant. 
+
+```{r}
+clim_month %>% 
+  ggplot(aes(x=year, tmin)) +
+  geom_line()+
+  facet_wrap(~month)+
+  labs(title = "Minimum Temperature Trends by Month", y="Temperature (F)", x="Year")+
+  theme_minimal()
+```
+
+## Precipitation
+Not much trend conclusion can be drawn from precipitation data alone, but we can still visualize the trends.
+```{r}
+clim_month %>% 
+  ggplot(aes(x=year, precip)) +
+  geom_line()+
+  facet_wrap(~month)+
+  labs(title = "Precipitation Trends by Month", y="Precipitation (Inches)", x="Year")+
+  theme_minimal()
+```
+
+:::
+
+### Statistical test on seasonal temperature data
+#### Linear regression
+We want to use linear regression to test the climate trends in summer months. 
+
+```{r message=FALSE, warning=FALSE}
+# create a variable for seasons
+clim_clean$season = ifelse(month(clim_clean$DATE) %in% c(12,1,2), 1, ifelse(month(clim_clean$DATE) %in% c(3:5),2, ifelse(month(clim_clean$DATE) %in% c(6:8),3,4)))
+clim.byseason = clim_clean %>% 
+  mutate(year = year(DATE)) %>% 
+  group_by(year, season) %>% 
+  summarize(tmax=mean(TMAX), tmin=mean(TMIN), precip=sum(PRCP))
+
+# look only at summer
+clim.summer = subset(clim.byseason, clim.byseason$season==3)
+#tmp=unique(year(date))
+#clim.summer$wy = tmp[1:length(tmp)-1]
+
+ggplot(clim.summer, aes(x=year, y=tmin)) + 
+  stat_summary(fun.y="mean", geom="point", col="salmon", size=4)+
+  theme(axis.text=element_text(size=14, face="bold"), axis.title=element_text(size=14, face="bold")) +
+  geom_smooth(method="lm", col="brown")+
+  labs(y=" Summer Minimum Daily Temperature C")+
+  theme_minimal()
+```
+```{r}
+res=lm(tmin~year, data=clim.summer)
+summary(res)
+```
+**The model shows a statistically significant positive trend in maximum summer temperature over the years. For every one-year increase, `tmax` is expected to increase by 0.10253 degree. Both the slope and the overall model are highly significant (p-values < 0.001)**
+
+#### Mann-Kendall test
+
+Regression assumes a linear relationship - and normally distributed data - sometimes that isn’t true, we can use non-parameteric tests to look for trends. In these cases, the Mann-Kendall test is commonly used.
+
+tau ranges from -1 to 1 and denotes the “strength” of the trend; p-value denotes significance. Strength however can not be interpreted as slope!
+
+```{r codefolding=FALSE}
+MannKendall(clim.summer$tmin)
+MannKendall(clim.summer$tmax)
+MannKendall(clim.summer$precip)
+```
+
+Interpretation of the results:
+
+- The Mann-Kendall test for the summer minimum temperature shows a statistically significant positive trend (p-value < 0.001). The tau value of 0.514 indicates a moderate positive trend.
+
+- The Mann-Kendall test for the summer maximum temperature also shows a statistically significant positive trend (p-value < 0.001). The tau value of 0.5 indicates a moderate positive trend.
+
+- The Mann-Kendall test for the summer precipitation shows a statistically nonsignificant negative trend (p-value > 0.19334). 
+
+### Trend analysis for climate extremes
+
+In this section, we will analyze the trends in temperature and precipitation extremes over time. 
+
+#### Extreme metrics: number of freezing days
+```{r}
+clim_clean$freeze = ifelse(clim_clean$TMIN <= 32, 1, 0)
+clim.wfrdata <- clim_clean %>%  
+  group_by(year(DATE)) %>% 
+  summarize(ndayfr=sum(freeze, na.rm=TRUE))
+clim.wfrdata$dt = unique(year(clim_clean$DATE))
+
+ggplot(clim.wfrdata, aes(dt, ndayfr))+geom_point()+labs(y="Number of Freezing Days")
+```
+**Interpertation of the results:...**
+
+#### Extreme metrics: Return periods
+We’ll specify some reasonable threshold for daily precipitation: say, 1 inch/day. To calculate the return period associated with that threshold, what we do is the following: * Use ifelse to create a field called “flood” that is 1 when precipitation is above the threshold, and 0 otherwise * Store the total number of years by first identifying the total number of unique years, then calculating the length of the array where those unique years are listed
+
+The return period is then the number of years (plus one to include the starting year) divided by the number of times the threshold exceedance has actually occurred. (Note: we have to use the na.rm=TRUE flag to prevent NA entries from seeming like they are contributing to the count of threshold exceedances!)
+
+```{r}
+clim_clean$flood = ifelse(clim_clean$PRCP >= 1, 1, 0)
+nyrs=length(unique(year(clim_clean$DATE)))
+
+retper=(nyrs+1)/sum(clim_clean$flood,na.rm=TRUE)
+retper
+```
+
+
+ **A flood day (precipitation ≥ 1) is expected to occur roughly every 99 days on average.**
